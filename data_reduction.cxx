@@ -176,11 +176,11 @@ int main(int argc, char* argv[])
                 }
             }
         }
-        std::cout << "THE FINIAL ENTRIES = " << new_event_orbit.size() << std::endl;
+        std::cout << "THE FINAL ENTRIES = " << new_event_orbit.size() << " (" << new_event_orbit.size()*100/Evt_nRow << "%)" << std::endl;
     }
     else 
     {
-        std::cout << "THE FINIAL ENTRIES = " << 0 << std::endl;
+        std::cout << "THE FINAL ENTRIES = " << 0 << std::endl;
     }
 
 
