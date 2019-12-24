@@ -68,15 +68,20 @@ int main(int argc, char* argv[])
     std::cout << "nRows of Event = " << Evt_nRow << std::endl;
 
     double* time_evt;
+    double* pulse_width;
     doublenull = 0;
     time_evt = new double[Evt_nRow];
+    pulse_width = new double[Evt_nRow];
     int evt_time_colnum;
+    int evt_pw_colnum;
     if (fits_get_colnum(fptr, CASEINSEN, "TIME", &evt_time_colnum, &status)) PrintError(status);
+    if (fits_get_colnum(fptr, CASEINSEN, "PULSE_WIDTH", &evt_pw_colnum, &status)) PrintError(status);
     if (fits_read_col(fptr, TDOUBLE, evt_time_colnum, 1, 1, Evt_nRow, &doublenull, time_evt, &anynull, &status)) PrintError(status);
+    if (fits_read_col(fptr, TDOUBLE, evt_pw_colnum, 1, 1, Evt_nRow, &doublenull, pulse_width, &anynull, &status)) PrintError(status);
     if (fits_close_file(fptr, &status)) PrintError(status);
     /* finish read Evt file */
 
-    /* ################ DELETE grb mode time intervals */
+    /* ################ DELETE grb mode time intervals and select Pulse width*/
     std::vector<double> new_event;
 
     /* find the GTI edges from HV time */
@@ -98,14 +103,14 @@ int main(int argc, char* argv[])
     {
         for (int j=0; j<left_edges.size(); j++)
         {
-            if (time_evt[i] >= left_edges[j] && time_evt[i] <= right_edges[j])
+            if (time_evt[i] >= left_edges[j] && time_evt[i] <= right_edges[j] && pulse_width[i] >= 80)
             {
                 new_event.push_back(time_evt[i]);
                 break;
             }
         }
     }
-    /* Finish deleting GRB mode data */
+    /* Finish deleting GRB mode data and pulse width */
     std::cout << std::fixed << "Entries of new Events = " << new_event.size() << std::endl;
 
     /* ############### calculate fake elv */
