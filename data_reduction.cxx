@@ -3,15 +3,23 @@
 #include "fitsio.h"
 #include <fstream>
 #include <vector>
+#include <math.h>
 
 //prototype
 void find_edges(std::vector<double>& x, std::vector<double>& y, std::vector<double> time_series);
+void get_fake_elv(double RA, double DEC, std::vector<double> x, std::vector<double> y, std::vector<double> z, std::vector<double>& theta);
 void PrintError(int status);
 //
 //
 //
 
 
+/* global variables */
+int HV_criteria = -800;
+double ra_source = 83.63322083;
+double dec_source= 22.01446111111;
+#define PI 3.14159265
+double earch_theta = 70*PI/180;
 
 int main(int argc, char* argv[])
 {
@@ -19,6 +27,7 @@ int main(int argc, char* argv[])
     std::cout << ">>>>>>>>>>>>> Data reduction" << std::endl;
     char* filename = argv[1];
     char* hvfilename = argv[2];
+    char* orbitname  = argv[3];
     std::cout << filename << std::endl;
     std::cout << hvfilename << std::endl;
 
@@ -75,7 +84,7 @@ int main(int argc, char* argv[])
 
     for (int i=0; i<HV_nRows; i++)
     {
-        if (highV[i] <= -800)
+        if (highV[i] <= HV_criteria)
         {
             new_time_hv.push_back(time_hv[i]);
         }
@@ -100,13 +109,85 @@ int main(int argc, char* argv[])
     std::cout << std::fixed << "Entries of new Events = " << new_event.size() << std::endl;
 
     /* ############### calculate fake elv */
+    // get column number
+    int orbit_nRows, time_orbit_colnum, x_colnum, y_colnum, z_colnum;
+    if (fits_open_file(&fptr, orbitname, READONLY, &status)) PrintError(status);
+    if (ffmahd(fptr, 2, &datatype, &status)) PrintError(status);
+    if (ffgky(fptr, TINT, "NAXIS2", &orbit_nRows, NULL, &status)) PrintError(status);
+    if (fits_get_colnum(fptr, CASEINSEN, "TIME", &time_orbit_colnum, &status)) PrintError(status);
+    if (fits_get_colnum(fptr, CASEINSEN, "X", &x_colnum, &status)) PrintError(status);
+    if (fits_get_colnum(fptr, CASEINSEN, "Y", &y_colnum, &status)) PrintError(status);
+    if (fits_get_colnum(fptr, CASEINSEN, "Z", &z_colnum, &status)) PrintError(status);
+    std::cout << "nRows of Orbit = " << orbit_nRows << std::endl;
 
+    double* tmp_time_orbit;
+    double* tmp_j2000_x;
+    double* tmp_j2000_y;
+    double* tmp_j2000_z;
+    tmp_time_orbit = new double[orbit_nRows];
+    tmp_j2000_x = new double[orbit_nRows];
+    tmp_j2000_y = new double[orbit_nRows];
+    tmp_j2000_z = new double[orbit_nRows];
+    if (fits_read_col(fptr, TDOUBLE, time_orbit_colnum, 1, 1, orbit_nRows, &doublenull, tmp_time_orbit, &anynull, &status)) PrintError(status);
+    if (fits_read_col(fptr, TDOUBLE, x_colnum, 1, 1, orbit_nRows, &doublenull, tmp_j2000_x, &anynull, &status)) PrintError(status);
+    if (fits_read_col(fptr, TDOUBLE, y_colnum, 1, 1, orbit_nRows, &doublenull, tmp_j2000_y, &anynull, &status)) PrintError(status);
+    if (fits_read_col(fptr, TDOUBLE, z_colnum, 1, 1, orbit_nRows, &doublenull, tmp_j2000_z, &anynull, &status)) PrintError(status);
+    if (fits_close_file(fptr, &status)) PrintError(status);
+    std::vector<double> time_orbit;
+    std::vector<double> j2000_x;
+    std::vector<double> j2000_y;
+    std::vector<double> j2000_z;
+    for (int i=0; i<orbit_nRows; i++)
+    {
+        time_orbit.push_back(tmp_time_orbit[i]);
+        j2000_x.push_back(tmp_j2000_x[i]);
+        j2000_y.push_back(tmp_j2000_y[i]);
+        j2000_z.push_back(tmp_j2000_z[i]);
+    }
 
+    // get the fake ELV angle
+    std::vector<double> elv;
+    std::vector<double> new_time_orbit;
+    get_fake_elv(ra_source, dec_source, j2000_x, j2000_y, j2000_z, elv);
+    for (int i=0; i<orbit_nRows; i++)
+    {
+        if (elv[i] >= earch_theta)
+        {
+            new_time_orbit.push_back(time_orbit[i]);
+        }
+    }
+
+    if (new_time_orbit.size() != 0)
+    {
+        std::vector<double> left_edges_orbit;
+        std::vector<double> right_edges_orbit;
+        std::vector<double> new_event_orbit;
+        find_edges(left_edges_orbit, right_edges_orbit, new_time_orbit);
+        /* finish finding the GTI edges */
+        /* select the event from the first GTI selection (new_event) by this good GTI */
+        for (int i=0; i<new_event.size(); i++)
+        {
+            for (int j=0; j<left_edges.size(); j++)
+            {
+                if (new_event[i] >= left_edges_orbit[j] && new_event[i] <= right_edges_orbit[j])
+                {
+                    new_event_orbit.push_back(new_event[i]);
+                    break;
+                }
+            }
+        }
+        std::cout << "THE FINIAL ENTRIES = " << new_event_orbit.size() << std::endl;
+    }
+    else 
+    {
+        std::cout << "THE FINIAL ENTRIES = " << 0 << std::endl;
+    }
 
 
     // cleaning
-    delete time_hv;
-    delete highV;
+    delete[] tmp_time_orbit, tmp_j2000_x, tmp_j2000_y, tmp_j2000_z;
+    delete[] time_hv;
+    delete[] highV;
 
     return 0;
 }
@@ -143,6 +224,19 @@ void find_edges(std::vector<double>& left_edges, std::vector<double>& right_edge
     }
 }
 
+void get_fake_elv(double RA, double DEC, std::vector<double> x, std::vector<double> y, std::vector<double> z, std::vector<double>& theta)
+{
+
+    double x_source = cos(DEC*PI/180) * cos(RA*PI/180);
+    double y_source = cos(DEC*PI/180) * sin(RA*PI/180);
+    double z_source = sin(DEC*PI/180);
+    
+    for (int i=0; i< x.size(); i++)
+    {
+        theta.push_back( acos((-x[i]*x_source - y[i]*y_source - z[i]*z_source)/(sqrt(x[i]*x[i] + y[i]*y[i] + z[i]*z[i]))) );
+        // the Theta value in units of Radius
+    }
+}
 
 void PrintError(int status)
 {
