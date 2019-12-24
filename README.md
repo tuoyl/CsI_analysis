@@ -5,7 +5,8 @@
 
 ## Data reduction
 
-### delete GRB mode data
-### calculate fake ELV, ELV > 0
+### delete GRB mode data (check)
+### calculate fake ELV, ELV > 0 (check)
+### save the products
     
 ## phase calculation
