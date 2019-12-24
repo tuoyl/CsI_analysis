@@ -87,18 +87,17 @@ int main(int argc, char* argv[])
     /* select the event in that good GTI */
     for (int i=0; i<Evt_nRow; i++)
     {
-        for (int j=0; j<left_edges.size(); i++)
+        for (int j=0; j<left_edges.size(); j++)
         {
             if (time_evt[i] >= left_edges[j] && time_evt[i] <= right_edges[j])
             {
                 new_event.push_back(time_evt[i]);
                 break;
             }
-            continue;
         }
     }
     /* Finish deleting GRB mode data */
-    std::cout << std::fixed << "Entries of new Events: " << new_event.size() << std::endl;
+    std::cout << std::fixed << "Entries of new Events = " << new_event.size() << std::endl;
 
     /* ############### calculate fake elv */
 
